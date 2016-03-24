@@ -1,0 +1,48 @@
+#!/bin/bash
+# Objective:  Handles rSync
+# Original: Author Russ Thompson @ viGeek.net
+# Adaptations: Jo Cook
+
+# Log & Email params...
+LOGF="$(pwd)/rsync-results.log"
+ETO="youremail@domain.com"
+ESUB="$(hostname -s) - rSync - FAILURE"
+EFILE="msg.txt"
+EMAILCMD='ssmtp "$ETO" < $EFILE' #adjust to fit your email client
+
+# Rsync options
+SRC="/yoursource" #edit this
+DEST="/yourdest" #edit this
+OPTS="-aAXv" #change if you like
+EXCLUDEFILE="exclude-file.txt"
+
+
+
+# Make initial log entry...
+echo "rSyncd script kicked off at $(date) by $(whoami)" >> $LOGF
+
+
+# This deletes rsync-results.log after xyz (to prevent buildup)
+find $LOGF -mtime +30 -exec rm {} \;
+# Can also be deleted via size parameters
+
+function trap_clean {
+    # Error handling...
+    echo "$(hostname) caught error on line $LINENO at $(date +%l:%M%p) via script $(basename $0)" | tee -a $EFILE $LOGF
+    echo "Please see the tail end of $LOGF for additional error details...">> $EFILE
+}
+
+# Defined trap conditions
+trap trap_clean ERR SIGHUP SIGINT SIGTERM
+
+# Construct rsync command from variables, echo it to command line then run it
+echo "rsync $OPTS --exclude={$EXCLUDE} $SRC $DEST"
+rsync $OPTS --exclude-from $EXCLUDEFILE $SRC $DEST 2>> $LOGF
+
+# Fill log with line for easy reading, and send email to say backup ran
+echo "--------------------------------------------------------------------------------------------------------------" >> $LOGF
+echo "Backup ran at $(date +%l:%M%p)" >> $EFILE
+$EMAILCMD
+
+# Cleanup our e-mail template file
+sed -i".bak" '5,$d' $EFILE
