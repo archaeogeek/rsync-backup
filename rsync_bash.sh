@@ -1,64 +1,49 @@
-#!/bin/sh
+#!/bin/bash
 # Objective:  Handles rSync
 # Author Russ Thompson @ viGeek.net
 # This script assumes you're using password-less login (via keys).  User/PASS can be added easily via opts.
 
-# Log & Email parms...
+# Log & Email params...
 LOGF="$(pwd)/rsync-results.log"
-ETO"whatever@email.com"
+ETO="jo.k.cook@gmail.com"
 ESUB="$(hostname -s) - rSync - FAILURE"
-EFILE="tmpemail.txt"
+EFILE="msg.txt"
 
 # Make initial log entry...
 echo "rSyncd script kicked off at $(date) by $(whoami)" >> $LOGF
 
-# Remote host machine name (supports multiple entries)
-REMOTE_SERVERS="69.69.69.69"
-
-# Directory to copy from on the source machine.
-SRCDIR="/path/to/source/"
-
-# Directory to copy to on the destination machine.
-DESTDIR="/path/to/destination"
-
-# Path to SSH
-SSH=/usr/bin/ssh
+# Rsync options
+SRC="/"
+#EXCLUDE='"/dev/*","/proc/*","/sys/*","/tmp/*","/run/*","/mnt/*","/media/*","/lost+found","/home/*/.thumbnails/*","/home/*/.cache/mozilla/*","/home/*/.cache/chromium/*","/home/*/.local/share/Trash/*"'
+DEST="/media/jo/SAMSUNG/backup"
+OPTS="-aAXv"
+EXCLUDEFILE="exclude-file.txt"
 
 # Does copy, but still gives a verbose display of what it is doing (CHANGE THESE)
-OPTS="-rptgvv --remove-sent-files --delete-after"
+#OPTS="-rptgvv --remove-sent-files --delete-after"
 
 # This deletes rsync-results.log after xyz (to prevent buildup)
 find $LOGF -mtime +30 -exec rm {} \;
-# Can also be deleted via size paramaters
+# Can also be deleted via size parameters
 
 function trap_clean {
     # Error handling...
-    echo -e "$(hostname) caught error on line $LINENO at $(date +%l:%M%p) via script $(basename $0)" | tee -a $EFILE $LOGF
-    echo -e "Please see the tail end of $LOGF for additional error details...">> $EFILE
-    /bin/mail -s "$ESUB" "$EADDY" < $EFILE
-    # Cleanup our temp e-mail file
-    rm -f $EFILE
+    echo "$(hostname) caught error on line $LINENO at $(date +%l:%M%p) via script $(basename $0)" | tee -a $EFILE $LOGF
+    echo "Please see the tail end of $LOGF for additional error details...">> $EFILE
+    #ssmtp "$ETO" < $EFILE
 }
 
 # Defined trap conditions
 trap trap_clean ERR SIGHUP SIGINT SIGTERM
 
-# Determine that files exist
-if ls $SRCDIR ; then
-  for REMOTE in $REMOTE_SERVERS
-  do
-      VAR=`ping -s 1 -c 1 $REMOTE > /dev/null; echo $?`
-      if [ $VAR -eq 0 ]; then
-      echo "rsync $OPTS $REMOTE::$SRCDIR $DESTDIR"
-      rsync -e "$SSH" $OPTS $SRCDIR $REMOTE::$DESTDIR 2>> $LOGF
-  else
-      echo "Cannot connect to $REMOTE." >> $LOGF
-      fi
-  done
-else
-  echo "rSync script did not run : no files present" >> $LOGF
-fi
+# Construct rsync command from variables, echo it to command line then run it
+echo "rsync $OPTS --exclude={$EXCLUDE} $SRC $DEST"
+rsync $OPTS --exclude-from $EXCLUDEFILE $SRC $DEST 2>> $LOGF
 
-# Fill log with line for easy reading...
+# Fill log with line for easy reading, and send email to say backup ran
 echo "--------------------------------------------------------------------------------------------------------------" >> $LOGF
-Comments are closed.
+echo "Backup ran at $(date +%l:%M%p)" >> $EFILE
+ssmtp "$ETO" < $EFILE
+
+# Cleanup our e-mail template file
+sed -i".bak" '5,$d' $EFILE
