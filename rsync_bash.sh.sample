@@ -26,22 +26,25 @@ find $LOGF -mtime +30 -exec rm {} \;
 # Can also be deleted via size parameters
 
 function trap_clean {
-    # Error handling...
+    # Error handling- only email if there's a problem
     echo "$(hostname) caught error on line $LINENO at $(date +%l:%M%p) via script $(basename $0)" | tee -a $EFILE $LOGF
-    echo "Please see the tail end of $LOGF for additional error details...">> $EFILE
+    echo "Please see the tail end of $LOGF for additional error details..." >> $EFILE
+    /usr/sbin/ssmtp $ETO < $EFILE
 }
 
 # Defined trap conditions
 trap trap_clean ERR SIGHUP SIGINT SIGTERM
 
 # Construct rsync command from variables, echo it to command line then run it
+# Skip permissions errors (code 23) as we don't care about them, otherwise report error
 echo "rsync $OPTS --exclude-from $EXCLUDEFILE $SRC $DEST"
-rsync $OPTS --exclude-from $EXCLUDEFILE $SRC $DEST 2>> $LOGF
+/usr/bin/rsync $OPTS --exclude-from $EXCLUDEFILE $SRC $DEST 2>> $LOGF || $(case "$?" in 0|23) exit 0 ;; *) exit $?; esac)
 
-# Fill log with line for easy reading, and send email to say backup ran
+# Fill log with line for easy reading
 echo "--------------------------------------------------------------------------------------------------------------" >> $LOGF
-echo "Backup ran at $(date +%l:%M%p)" >> $EFILE
-ssmtp $ETO < $EFILE
+
+
 
 # Cleanup our e-mail template file
 sed -i".bak" '5,$d' $EFILE
+
